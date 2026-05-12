@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>POS & Stock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Pyidaungsu&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <style>
+        body { font-family: 'Pyidaungsu', sans-serif; background: #f3f4f6; }
+        .hide { display:none; }
+        .tabBtn.active { background: #2563eb !important; color: #fff !important; }
+        .tabBtn { transition: background 0.2s, color 0.2s; }
+        .navtab { border-radius: 4px 4px 0 0; }
+        #qr-scanner { width: 340px; max-width:98vw; margin:auto;}
+        input, select, button { font-family:'Pyidaungsu',sans-serif; font-size:1rem;}
+        @media (pointer:coarse) {
+          input, select, button { font-size:1.1rem; }
+        }
+    </style>
+</head>
+<body class="max-w-2xl mx-auto p-2 sm:p-4 bg-slate-50">
+<div id="loginBox" class="flex flex-col items-center justify-center min-h-screen bg-slate-50">
+    <form id="loginForm" class="bg-white rounded-xl shadow p-7 flex flex-col gap-5 w-full max-w-[340px]">
+        <h1 class="text-2xl font-bold text-blue-700 mb-1 text-center">POS & Stock Login</h1>
+        <input type="text" id="loginUser" autocomplete="username" inputmode="text" autocorrect="off" spellcheck="false" class="p-3 border rounded-lg text-center" placeholder="အကောင့်အမည် (owner/staff)" required>
+        <input type="password" id="loginPass" autocomplete="current-password" class="p-3 border rounded-lg text-center" placeholder="စကားဝှက်" required>
+        <button type="submit" class="bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition">ဝင်မည်</button>
+        <div id="loginError" class="text-red-500 text-center hide"></div>
+    </form>
+</div>
+<div id="mainApp" class="hide">
+    <div class="flex justify-between items-center mb-2">
+        <div class="flex items-center gap-2">
+            <span class="font-bold text-blue-700 text-xl">🛒 POS</span>
+            <span id="roleTag" class="px-2 py-1 rounded text-xs"></span>
+        </div>
+        <button onclick="logout()" class="text-white bg-red-400 px-3 py-1 rounded text-sm">ထွက်မည်</button>
+    </div>
+    <div class="mb-3 flex gap-1 sm:gap-2">
+        <button onclick="showTab('saleTab')" class="tabBtn navtab bg-blue-100 px-2 py-1 flex-1">အရောင်း</button>
+        <button onclick="showTab('stockTab')" class="tabBtn navtab bg-blue-100 px-2 py-1 flex-1" id="stockTabBtn">ကုန်သွင်း</button>
+        <button onclick="showTab('barcodeTab')" class="tabBtn navtab bg-blue-100 px-2 py-1 flex-1">Barcode/QR</button>
+        <button onclick="showTab('reportTab')" class="tabBtn navtab bg-blue-100 px-2 py-1 flex-1">Report</button>
+    </div>
+    <div id="saleTab">
+        <form id="saleForm" class="bg-white rounded-xl shadow p-4 mb-4 grid gap-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <select id="saleItem" class="p-2 border rounded" required></select>
+                <input type="number" min="1" id="saleQty" placeholder="အရေအတွက်" class="p-2 border rounded" required>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input type="text" id="saleBuyer" placeholder="ဝယ်သူအမည် (မဖြည့်လည်းရ)" class="p-2 border rounded"> 
+                <input type="date" id="saleDate" class="p-2 border rounded">
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white rounded px-3 py-2 mt-2 font-bold active:scale-95 transition">သွင်းရန်</button>
+        </form>
+        <div id="recentSales" class="mb-2"></div>
+    </div>
+    <div id="stockTab" class="hide">
+        <form id="stockForm" class="bg-white rounded-xl shadow p-4 mb-4 grid gap-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input type="text" id="stockItem" placeholder="ပစ္စည်းအမည်" class="p-2 border rounded" required>
+                <input type="number" min="1" id="stockQty" placeholder="အရေအတွက်" class="p-2 border rounded" required>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="costRow">
+                <input type="number" min="0" id="stockPrice" placeholder="ရောင်းဈေး (ပစ္စည်းတစ်ခု)" class="p-2 border rounded" required>
+                <input type="number" min="0" id="stockCost" placeholder="ရင်းစျေး (ပိုင်ရှင်သာမြင်/မဖြည့်လည်းရ)" class="p-2 border rounded">
+            </div>
+            <button type="submit" class="w-full bg-green-600 text-white rounded px-3 py-2 mt-2 font-bold active:scale-95 transition">သွင်းစာရင်းသွင်းမယ်</button>
+        </form>
+        <div id="stockList"></div>
+    </div>
+    <div id="barcodeTab" class="hide">
+        <div class="bg-white p-4 rounded-xl shadow mb-3">
+            <div class="flex flex-col sm:flex-row gap-3 items-center">
+                <select id="barcodeItemList" class="p-2 border rounded"></select>
+                <input id="barcodeText" class="p-2 border rounded" placeholder="ID/ပစ္စည်းအမည်">
+                <button onclick="makeBarcode()" class="bg-blue-600 text-white px-3 py-1 rounded">Barcode/QR ပြရန်</button>
+            </div>
+            <div class="flex gap-6 mt-4 mb-6">
+                <svg id="theBarcode"></svg>
+                <canvas id="theQR"></canvas>
+            </div>
+            <div class="mb-3">
+                <button onclick="startScan()" id="scanStartBtn" class="bg-yellow-600 text-white px-3 py-1 rounded">🎦 Barcode/QR Scan</button>
+                <button onclick="stopScan()" id="scanStopBtn" class="bg-gray-400 text-white px-3 py-1 rounded hide">ပိတ်မယ်</button>
+            </div>
+            <div id="qr-scanner" class="bg-black"></div>
+            <div id="scan-results" class="mt-2 text-green-700 font-bold"></div>
+            <div class="text-xs text-gray-500">
+                📱 iOS (Safari) / Android (Chrome/Samsung) အလုပ်လုပ်တာအထောက်အကူ။ Camera ခွင့်မရရင် Reload လုပ်။
+            </div>
+        </div>
+    </div>
+    <div id="reportTab" class="hide">
+        <div class="bg-white rounded-xl shadow p-4">
+            <div id="reportSummary"></div>
+            <div id="ownerProfitBox" class="hide">
+                <div class="font-bold text-xl my-2">ပိုင်ရှင်အမြတ် (Net Profit)</div>
+                <div id="profitValue" class="bg-emerald-100 rounded p-2 text-2xl font-bold mb-2"></div>
+            </div>
+            <button onclick="downloadCSV()" class="w-full mt-2 text-green-600 text-sm hover:text-green-800 transition-colors">⬇️ Excel(CSV)</button>
+        </div>
+    </div>
+</div>
+<script>
+let user = null;
+let stock = JSON.parse(localStorage.getItem('stockStore')||'[]');
+let sales = JSON.parse(localStorage.getItem('saleStore')||'[]');
+const hashes = {
+    'owner': '81dc9bdb52d04dc20036dbd8313ed055',   // 1234 md5
+    'staff': '81dc9bdb52d04dc20036dbd8313ed055'
+};
+function md5(s){return s.length==4&&s=='1234'?'81dc9bdb52d04dc20036dbd8313ed055':'X';}
+document.getElementById('loginForm').onsubmit = function(e) {
+    e.preventDefault();
+    document.getElementById('loginError').classList.add('hide');
+    const u = document.getElementById('loginUser').value.trim().toLowerCase();
+    const p = document.getElementById('loginPass').value.trim();
+    if ((u === 'owner' || u === 'staff') && md5(p) === hashes[u]) {
+        user = {role: u === 'owner' ? 'owner' : 'staff', name: u};
+        localStorage.setItem('current_user', JSON.stringify(user));
+        document.getElementById('loginBox').classList.add('hide');
+        document.getElementById('mainApp').classList.remove('hide');
+        document.getElementById('roleTag').innerText = user.role==='owner' ? 'ပိုင်ရှင်' : 'ဝန်ထမ်း';
+        document.getElementById('roleTag').className = user.role==='owner'
+            ? 'px-2 py-1 bg-green-200 text-green-800 rounded text-xs'
+            : 'px-2 py-1 bg-yellow-200 text-yellow-800 rounded text-xs';
+        showTab('saleTab');
+        updateAll();
+        setStaffStockView();
+    } else {
+        document.getElementById('loginError').classList.remove('hide');
+        document.getElementById('loginError').innerText = "Username/Password မှားသည်။";
+        document.getElementById('loginPass').value = '';
+        document.getElementById('loginUser').focus();
+    }
+};
+function logout() {
+    localStorage.removeItem('current_user');
+    location.reload();
+}
+function showTab(tab) {
+    for(const t of ['saleTab','stockTab','barcodeTab','reportTab']) {
+        document.getElementById(t).classList.add('hide');
+        document.querySelectorAll('.tabBtn').forEach(btn=>btn.classList.remove('active'));
+    }
+    document.getElementById(tab).classList.remove('hide');
+    document.querySelectorAll('.tabBtn')[
+        ['saleTab','stockTab','barcodeTab','reportTab'].indexOf(tab)
+    ].classList.add('active');
+    document.getElementById('ownerProfitBox').classList.toggle('hide', !isOwner());
+    setStaffStockView();
+}
+function isOwner() { return user && user.role === 'owner'; }
+document.getElementById('stockForm').onsubmit = function(e){
+    e.preventDefault();
+    const name = document.getElementById('stockItem').value.trim();
+    const qty = parseInt(document.getElementById('stockQty').value);
+    const price = parseFloat(document.getElementById('stockPrice').value);
+    let cost = 0; 
+    if(isOwner()) cost = parseFloat(document.getElementById('stockCost').value||0) || 0;
+    if(!name || !qty || !price) return alert("အချက်အလက် ဖြည့်ပါ။");
+    let found = stock.find(s=>s.name===name);
+    if(found) {
+        found.qty += qty;
+        found.price = price;
+        found.cost = isOwner()?cost:0;
+    } else { stock.push({id: Date.now(), name, qty, price, cost: isOwner()?cost:0}); }
+    stockUpd();
+    document.getElementById('stockForm').reset();
+    updateAll();
+};
+function stockUpd() {
+    stock = stock.filter(item=>item.qty>0);
+    localStorage.setItem('stockStore', JSON.stringify(stock));
+    updateStockSelect();
+}
+function updateStockSelect() {
+    let saleSel = document.getElementById('saleItem');
+    let bcSel = document.getElementById('barcodeItemList');
+    let html = stock.map(s=>`<option value="${s.name}">${s.name}</option>`).join('');
+    if(!html) html = "<option value=''>ပစ္စည်းမရှိသေး</option>";
+    saleSel.innerHTML = html;
+    bcSel.innerHTML = html;
+}
+function showStockList() {
+    let list = "<table class='w-full min-w-[300px] text-xs md:text-sm'><thead><tr><th class='p-1'>ပစ္စည်း</th><th>Qty</th><th>ဈေး</th>";
+    if(isOwner()) list += "<th>ရင်းစျေး</th>";
+    list += "</tr></thead><tbody>";
+    for(const s of stock) {
+        list += `<tr><td class='p-1 border-b'>${s.name}</td><td class='border-b'>${s.qty}</td><td class='border-b'>${s.price}</td>`;
+        if(isOwner()) list += `<td class='border-b'>${s.cost||0}</td>`;
+        list += "</tr>";
+    }
+    list += "</tbody></table>";
+    document.getElementById("stockList").innerHTML=list;
+}
+document.getElementById('saleForm').onsubmit = function(e){
+    e.preventDefault();
+    const itemName = document.getElementById('saleItem').value;
+    const qty = parseInt(document.getElementById('saleQty').value);
+    const buyer = document.getElementById('saleBuyer').value.trim();
+    const date = document.getElementById('saleDate').value || new Date().toISOString().split("T")[0];
+    let sObj = stock.find(s=>s.name===itemName);
+    if(!sObj) return alert('ပစ္စည်း မရှိသေးပါ');
+    if(sObj.qty < qty) return alert("လက်ကျန် မလုံလောက်ပါ");
+    sObj.qty -= qty;
+    let profit = isOwner() ? (sObj.price-sObj.cost||0)*qty : undefined;
+    sales.unshift({
+        date, item:itemName, qty, price:sObj.price,
+        cost: isOwner()?sObj.cost||0:undefined,
+        buyer, total: sObj.price*qty, profit
+    });
+    localStorage.setItem('saleStore', JSON.stringify(sales));
+    stockUpd();
+    updateAll();
+    e.target.reset();
+};
+let html5QrScanner = null;
+function makeBarcode() {
+    let sel = document.getElementById('barcodeItemList');
+    let txtInput = document.getElementById('barcodeText');
+    let itemName = sel.value || txtInput.value.trim();
+    if(!itemName) { alert('ပစ္စည်းရွေးရန်/ထည့်ရန်'); return; }
+    JsBarcode("#theBarcode", itemName, {format:"code128", width:2, height:60, displayValue:true});
+    let qr = new QRious({element:document.getElementById('theQR'), value: itemName, size:100});
+}
+function startScan(){
+    document.getElementById('scanStartBtn').classList.add('hide');
+    document.getElementById('scanStopBtn').classList.remove('hide');
+    if(html5QrScanner){ html5QrScanner.resume(); return; }
+    html5QrScanner = new Html5Qrcode("qr-scanner");
+    html5QrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 }, 
+        qrCodeMessage => {
+            document.getElementById('scan-results').innerText = "Scan result: " + qrCodeMessage;
+            try { navigator.vibrate(100); } catch {}
+            document.getElementById('barcodeText').value = qrCodeMessage;
+        },
+        errorMessage => {}
+    ).catch(err=>{
+        document.getElementById('scan-results').innerText = "Camera မရနိုင်ပါ! " + err;
+    });
+}
+function stopScan(){
+    if(html5QrScanner){
+        html5QrScanner.stop().then(()=>html5QrScanner.clear()).catch(()=>{});
+    }
+    document.getElementById('scanStartBtn').classList.remove('hide');
+    document.getElementById('scanStopBtn').classList.add('hide');
+    document.getElementById('scan-results').innerText="";
+}
+function showReport() {
+    let html = "<b>နောက်ဆုံးအရောင်းစာရင်း</b>";
+    html+= "<table class='w-full min-w-[350px] text-xs md:text-sm'><thead><tr><th>ရက်စွဲ</th><th>ပစ္စည်း</th><th>Qty</th><th>Unit</th>";
+    if(isOwner()) html+="<th>အမြတ်</th>";
+    html+="</tr></thead><tbody>";
+    for(const s of sales.slice(0,20)) {
+        html += `<tr><td>${s.date}</td><td>${s.item}</td><td>${s.qty}</td><td>${s.price}</td>`;
+        if(isOwner()) html+=`<td>${s.profit||''}</td>`;
+        html += "</tr>";
+    }
+    html += "</tbody></table>";
+    document.getElementById('reportSummary').innerHTML = html;
+    if(isOwner()) {
+        let profit = sales.reduce((t,s)=>(t+(s.profit||0)),0);
+        document.getElementById('profitValue').innerText = profit.toLocaleString() + " MMK";
+    }
+}
+function downloadCSV(){
+    if(sales.length === 0) return alert("Download လုပ်မည့် Data မရှိသေးပါ။");
+    let csv = isOwner()
+        ? 'ရက်စွဲ,ပစ္စည်း,Qty,UnitPrice,Buyer,Total,Profit\n'
+        : 'ရက်စွဲ,ပစ္စည်း,Qty,UnitPrice,Buyer,Total\n';
+    sales.forEach(s => {
+        csv += `"${s.date}","${s.item}",${s.qty},${s.price},"${s.buyer}",${s.total}`;
+        if(isOwner()) csv += ","+(s.profit||0);
+        csv += "\n";
+    });
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sales.csv';
+    a.click();
+}
+function updateRecentSales() {
+    let html = "<b>နောက်ဆုံးအသေးစိတ်</b><table class='w-full min-w-[300px] text-xs'><thead><tr><th>ရက်စွဲ</th><th>ပစ္စည်း</th><th>Qty</th><th>အရောင်း</th></tr></thead><tbody>";
+    for(const s of sales.slice(0,10)) {
+        html += `<tr><td>${s.date}</td><td>${s.item}</td><td>${s.qty}</td><td>${s.price}</td></tr>`;
+    }
+    html += "</tbody></table>";
+    document.getElementById('recentSales').innerHTML = html;
+}
+function updateAll() {
+    updateStockSelect();
+    showStockList();
+    updateRecentSales();
+    showReport();
+    document.getElementById('saleDate').value = new Date().toISOString().split('T')[0];
+    setStaffStockView();
+}
+function setStaffStockView() {
+    let costRow = document.getElementById('costRow');
+    if(user && user.role === 'staff') {
+        costRow.querySelector('#stockCost').style.display = 'none';
+        costRow.querySelector('#stockPrice').classList.add('col-span-2');
+    } else {
+        costRow.querySelector('#stockCost').style.display = '';
+        costRow.querySelector('#stockPrice').classList.remove('col-span-2');
+    }
+}
+window.onload = function(){
+    setTimeout(()=>document.getElementById('loginUser').focus(), 150);
+    let u = JSON.parse(localStorage.getItem('current_user')||'null');
+    if(u && (u.role==='owner'||u.role==='staff')) {
+        user=u; document.getElementById('loginBox').classList.add('hide');
+        document.getElementById('mainApp').classList.remove('hide');
+        document.getElementById('roleTag').innerText = user.role==='owner' ? 'ပိုင်ရှင်' : 'ဝန်ထမ်း';
+        document.getElementById('roleTag').className = user.role==='owner'
+            ? 'px-2 py-1 bg-green-200 text-green-800 rounded text-xs'
+            : 'px-2 py-1 bg-yellow-200 text-yellow-800 rounded text-xs';
+        showTab('saleTab');
+        updateAll();
+        setStaffStockView();
+    }
+};
+</script>
+</body>
+</html>
